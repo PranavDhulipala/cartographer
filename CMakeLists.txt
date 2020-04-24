@@ -28,7 +28,7 @@ include("${PROJECT_SOURCE_DIR}/cmake/functions.cmake")
 google_initialize_cartographer_project()
 google_enable_testing()
 
-find_package(Boost REQUIRED COMPONENTS iostreams)
+find_package(Boost REQUIRED COMPONENTS iostreams zlib thread filesystem)
 find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
 find_package(Eigen3 REQUIRED)
 find_package(LuaGoogle REQUIRED)
@@ -38,8 +38,24 @@ if (${BUILD_GRPC})
   find_package(async_grpc REQUIRED)
 endif()
 
-include(FindPkgConfig)
-PKG_SEARCH_MODULE(CAIRO REQUIRED cairo>=1.12.16)
+if(NOT WIN32)
+  include(FindPkgConfig)
+  PKG_SEARCH_MODULE(CAIRO REQUIRED cairo>=1.12.16)
+else()
+  find_path(CAIRO_INCLUDE_DIRS cairo/cairo.h)
+  find_library(CAIRO_LIBRARY cairo)
+  set(CAIRO_LIBRARIES ${CAIRO_LIBRARY})
+endif()
+
+if(MSVC)
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+  add_compile_definitions(
+    _USE_MATH_DEFINES
+    BOOST_ALL_NO_LIB
+    BOOST_ALL_DYN_LINK
+    PROTOBUF_USE_DLLS
+  )
+endif()
 
 # Only build the documentation if we can find Sphinx.
 find_package(Sphinx)
@@ -123,7 +139,7 @@ foreach(ABS_FIL ${ALL_PROTOS})
     OUTPUT "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.cc"
            "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.h"
     COMMAND  ${PROTOBUF_PROTOC_EXECUTABLE}
-    ARGS --cpp_out  ${PROJECT_BINARY_DIR} -I
+    ARGS --cpp_out dllexport_decl=CARTOGRAPHER_API_PUBLIC:${PROJECT_BINARY_DIR} -I
       ${PROJECT_SOURCE_DIR} ${ABS_FIL}
     DEPENDS ${ABS_FIL}
     COMMENT "Running C++ protocol buffer compiler on ${ABS_FIL}"
@@ -149,7 +165,7 @@ if(${BUILD_GRPC})
       OUTPUT "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.cc"
              "${PROJECT_BINARY_DIR}/${DIR}/${FIL_WE}.pb.h"
       COMMAND  ${PROTOBUF_PROTOC_EXECUTABLE}
-      ARGS --cpp_out  ${PROJECT_BINARY_DIR}
+      ARGS --cpp_out dllexport_decl=CARTOGRAPHER_API_PUBLIC:${PROJECT_BINARY_DIR}
         -I ${PROJECT_SOURCE_DIR}
         ${ABS_FIL}
       DEPENDS ${ABS_FIL}
@@ -163,7 +179,9 @@ if(${BUILD_GRPC})
 endif()
 set(INSTALL_GENERATED_HDRS ${ALL_PROTO_HDRS} ${ALL_GRPC_SERVICE_HDRS})
 
-add_library(${PROJECT_NAME} ${ALL_LIBRARY_HDRS} ${ALL_LIBRARY_SRCS})
+add_library(${PROJECT_NAME} SHARED ${ALL_LIBRARY_HDRS} ${ALL_LIBRARY_SRCS})
+target_compile_definitions(${PROJECT_NAME} PRIVATE "CARTOGRAPHER_API_BUILDING_DLL")
+target_compile_definitions(${PROJECT_NAME} PRIVATE "CARTOGRAPHER_API_PUBLIC=__declspec(dllexport)")
 
 configure_file(
   ${PROJECT_SOURCE_DIR}/cartographer/common/config.h.cmake
@@ -213,8 +231,10 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 # We expect find_package(Ceres) to have located these for us.
-target_link_libraries(${PROJECT_NAME} PUBLIC glog)
-target_link_libraries(${PROJECT_NAME} PUBLIC gflags)
+if (NOT WIN32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC glog)
+  target_link_libraries(${PROJECT_NAME} PUBLIC gflags)
+endif()
 
 target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
   "${CAIRO_INCLUDE_DIRS}")
@@ -224,7 +244,10 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
   ${PROTOBUF_INCLUDE_DIR})
 # TODO(hrapp): This should not explicitly list pthread and use
 # PROTOBUF_LIBRARIES, but that failed on first try.
-target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY} pthread)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY})
+if(NOT WIN32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC pthread)
+endif()
 if(${BUILD_GRPC})
   target_link_libraries(${PROJECT_NAME} PUBLIC grpc++)
   target_link_libraries(${PROJECT_NAME} PUBLIC async_grpc)
@@ -238,6 +261,7 @@ set(TARGET_COMPILE_FLAGS "${TARGET_COMPILE_FLAGS} ${GOOG_CXX_FLAGS}")
 set_target_properties(${PROJECT_NAME} PROPERTIES
   COMPILE_FLAGS ${TARGET_COMPILE_FLAGS})
 
+if(NOT WIN32)
 set(TEST_LIB
   cartographer_test_library
 )
@@ -265,6 +289,7 @@ foreach(ABS_FIL ${ALL_TESTS})
   endif()
   target_link_libraries("${TEST_TARGET_NAME}" PUBLIC ${TEST_LIB})
 endforeach()
+endif()
 
 # Add the binary directory first, so that port.h is included after it has
 # been generated.

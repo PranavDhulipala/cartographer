@@ -16,7 +16,9 @@
 
 #include "cartographer/common/thread_pool.h"
 
-#include <unistd.h>
+#ifndef _MSC_VER
+  #include <unistd.h>
+#endif
 #include <algorithm>
 #include <chrono>
 #include <numeric>
