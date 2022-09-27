@@ -62,10 +62,12 @@ else()
   find_library(CAIRO_LIBRARIES cairo)
 endif()
 
-# Only build the documentation if we can find Sphinx.
-find_package(Sphinx)
-if(SPHINX_FOUND)
-  add_subdirectory("docs")
+if (NOT WIN32)
+  # Only build the documentation if we can find Sphinx.
+  find_package(Sphinx)
+  if(SPHINX_FOUND)
+    add_subdirectory("docs")
+  endif()
 endif()
 
 # Install catkin package.xml
