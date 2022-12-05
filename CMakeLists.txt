@@ -32,8 +32,7 @@ google_enable_testing()
 find_package(absl REQUIRED)
 set(BOOST_COMPONENTS iostreams)
 if(WIN32)
-  list(APPEND BOOST_COMPONENTS zlib)
-  set(Boost_USE_STATIC_LIBS FALSE)
+  find_package(ZLIB REQUIRED)
 endif()
 find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
@@ -266,7 +265,16 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
   ${PROTOBUF_INCLUDE_DIR})
 # TODO(hrapp): This should not explicitly list pthread and use
 # PROTOBUF_LIBRARIES, but that failed on first try.
-target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY} 
+if (WIN32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC
+    protobuf::libprotoc
+    protobuf::libprotobuf
+    protobuf::libprotobuf-lite
+  )
+else ()
+  target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY})
+endif()
+target_link_libraries(${PROJECT_NAME} PUBLIC 
   absl::algorithm
   absl::base
   absl::debugging
