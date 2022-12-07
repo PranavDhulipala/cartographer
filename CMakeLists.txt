@@ -38,13 +38,8 @@ find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
 find_package(Eigen3 REQUIRED)
 find_package(Lua REQUIRED)
-if(WIN32)
-  # On Windows, Protobuf is incorrectly found by the bundled CMake module, so prefer native CMake config.
-  set(protobuf_MODULE_COMPATIBLE TRUE CACHE INTERNAL "")
-  find_package(Protobuf 3.0.0 CONFIG)
-else()
-  find_package(Protobuf 3.0.0 REQUIRED)
-endif()
+
+find_package(Protobuf 3.0.0 REQUIRED)
 
 if (${BUILD_GRPC})
   find_package(async_grpc REQUIRED)
@@ -265,16 +260,7 @@ target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC
   ${PROTOBUF_INCLUDE_DIR})
 # TODO(hrapp): This should not explicitly list pthread and use
 # PROTOBUF_LIBRARIES, but that failed on first try.
-if (WIN32)
-  target_link_libraries(${PROJECT_NAME} PUBLIC
-    protobuf::libprotoc
-    protobuf::libprotobuf
-    protobuf::libprotobuf-lite
-  )
-else ()
-  target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY})
-endif()
-target_link_libraries(${PROJECT_NAME} PUBLIC 
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PROTOBUF_LIBRARY}
   absl::algorithm
   absl::base
   absl::debugging
